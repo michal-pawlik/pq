@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lib/pq/oid"
+	"github.com/michal-pawlik/pq/oid"
 )
 
 var (
