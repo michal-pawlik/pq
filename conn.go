@@ -5,6 +5,8 @@ import (
 	"context"
 	"crypto/md5"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/binary"
@@ -1916,4 +1918,17 @@ func alnumLowerASCII(ch rune) rune {
 		return ch
 	}
 	return -1 // discard
+}
+
+// GetSSLChain provides ssl chain for given server
+func GetSSLChain(dsn string) ([]*x509.Certificate, error) {
+	c, err := NewConnector(dsn)
+	if err != nil {
+		return nil, err
+	}
+	db, err := c.open(context.Background())
+
+	certs := db.c.(*tls.Conn).ConnectionState().PeerCertificates
+	db.Close()
+	return certs, nil
 }
