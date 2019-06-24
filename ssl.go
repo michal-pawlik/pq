@@ -73,6 +73,8 @@ func ssl(o values) (func(net.Conn) (net.Conn, error), error) {
 			if err != nil {
 				return nil, err
 			}
+		} else {
+			client.Handshake()
 		}
 		return client, nil
 	}, nil

@@ -277,6 +277,35 @@ func DialOpen(d Dialer, dsn string) (_ driver.Conn, err error) {
 	return c.open(context.Background())
 }
 
+func (c *Connector) listCerts(ctx context.Context) ([]*x509.Certificate, error) {
+	var err error
+	defer errRecoverNoErrBadConn(&err)
+	o := c.opts
+	cn := &conn{
+		opts:   o,
+		dialer: c.dialer,
+	}
+	err = cn.handleDriverSettings(o)
+	if err != nil {
+		return nil, err
+	}
+	cn.handlePgpass(o)
+	cn.c, err = dial(ctx, c.dialer, o)
+	if err != nil {
+		return nil, err
+	}
+	err = cn.ssl(o)
+	if err != nil {
+		if cn.c != nil {
+			cn.c.Close()
+		}
+		return nil, err
+	}
+	certs := cn.c.(*tls.Conn).ConnectionState().PeerCertificates
+	cn.c.Close()
+	return certs, nil
+}
+
 func (c *Connector) open(ctx context.Context) (cn *conn, err error) {
 	// Handle any panics during connection initialization.  Note that we
 	// specifically do *not* want to use errRecover(), as that would turn any
@@ -295,7 +324,6 @@ func (c *Connector) open(ctx context.Context) (cn *conn, err error) {
 		return nil, err
 	}
 	cn.handlePgpass(o)
-
 	cn.c, err = dial(ctx, c.dialer, o)
 	if err != nil {
 		return nil, err
@@ -1010,7 +1038,6 @@ func (cn *conn) ssl(o values) error {
 	if err != nil {
 		return err
 	}
-
 	if upgrade == nil {
 		// Nothing to do
 		return nil
@@ -1926,9 +1953,10 @@ func GetSSLChain(dsn string) ([]*x509.Certificate, error) {
 	if err != nil {
 		return nil, err
 	}
-	db, err := c.open(context.Background())
-
-	certs := db.c.(*tls.Conn).ConnectionState().PeerCertificates
-	db.Close()
+	c.opts["sslmode"] = "require"
+	certs, err := c.listCerts(context.Background())
+	if err != nil {
+		return nil, err
+	}
 	return certs, nil
 }
